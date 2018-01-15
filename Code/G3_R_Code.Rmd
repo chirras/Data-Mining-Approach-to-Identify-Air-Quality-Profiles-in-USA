@@ -1,0 +1,858 @@
+---
+title: "Group_3_FInal_Project"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+
+```{r}
+
+# CLear all data
+rm(list = ls())
+
+```
+
+```{r, eval=FALSE}
+
+# Install packages
+ipak <- function(pkg) {
+  # Install and load multiple R packages  
+  # Check to see if packages are installed 
+  # Install them if they are not, then load them
+  # Args:
+  #  pkg: packaged to be loaded into the R session or installed if not already 
+  # installed
+  # Returns:
+  #  Library load messages
+  # Check to see if package has been installed
+  new.pkg <- pkg[!(pkg %in% installed.packages()[, "Package"])]
+  # If not installed, then install
+  if (length(new.pkg)) {
+    install.packages(new.pkg, dependencies = TRUE)
+  }
+  sapply(pkg, require, character.only = TRUE)
+  sapply(pkg, library, character.only = TRUE)
+}
+
+#packages to install
+pkg <- c("tidyverse", "data.table", "knitr", 'e1071','car','DAAG','corrplot','cluster','NbClust','caret','reshape2','fiftystater','fpc','factoextra','MASS','cowplot','gridExtra','dbscan','mclust','plyr','psych')
+ipak(pkg)
+
+```
+
+
+```{r, warning=FALSE, message=FALSE}
+
+library(tidyverse)
+library(data.table)
+library(e1071)
+library(reshape2)
+library(plyr)
+library(psych)
+library(gridExtra)
+library(dbscan)
+library(fiftystater)
+library(factoextra)
+library(cluster)
+library(cowplot)
+library(fpc)
+library(mclust)
+library(corrplot)
+library(NbClust)
+library(caret)
+library(MASS)
+library(car)
+library(DAAG)
+
+
+```
+
+
+```{r, warning=FALSE}
+
+# Make sure file is in same directory otherwise edit this section if it's not
+prj_data <- read.csv("/Users/satishreddychirra/Document/aqi_new_nd.csv", header = T)
+
+```
+
+
+```{r, warning=FALSE}
+
+# Only reading the columns used for histograms
+histdata <- prj_data
+histdata <- subset(histdata, select = pm10_arithmetic_mean_n:wind_arithmetic_mean_n)
+names(histdata)[1]<-"PM10"
+names(histdata)[2]<-"CO"
+names(histdata)[3]<-"SO2"
+names(histdata)[4]<-"O3"
+names(histdata)[5]<-"PM2.5"
+names(histdata)[6]<-"TEMP"
+names(histdata)[7]<-"RH"
+names(histdata)[8]<-"NO2"
+names(histdata)[9]<-"AQI"
+names(histdata)[10]<-"WIND"
+
+par(mar=c(1,1,1,1))
+multi.hist(histdata, ylab=" ",density=TRUE, cex.lab=1.7, bcol="white",
+       dcol=c("blue","red"),dlty=c("dashed","solid"), lwd=2 ,main= " ",freq=FALSE)
+
+```
+
+
+```{r, warning=FALSE}
+
+# Plotting the intecorrelations
+M <- cor(histdata, method="pearson")
+corrplot(M,"pie", "lower")
+
+```
+
+```{r, warning=FALSE}
+
+# We then use boxplots to further identify the outliers
+boxplot(histdata$PM10,horizontal=TRUE,main="Boxplot of PM10 Concentration")
+boxplo1 <- ggplot(data = melt(histdata), aes(x=variable, y=value)) + geom_boxplot(aes(fill=variable))
+boxplo1
+
+```
+
+
+```{r, warning=FALSE}
+
+# Creating categorical variables for the seasons
+prj_data$spring <- ifelse(prj_data$month == "3" ,1, ifelse(prj_data$month == "4", 1, ifelse(prj_data$month == "5",1,0)))
+
+prj_data$summer <- ifelse(prj_data$month == "6" ,1, ifelse(prj_data$month == "7", 1, ifelse(prj_data$month == "8",1,0)))
+
+prj_data$fall <- ifelse(prj_data$month == "9" ,1, ifelse(prj_data$month == "10", 1, ifelse(prj_data$month == "11",1,0)))
+
+prj_data$winter <- ifelse(prj_data$month == "12" ,1, ifelse(prj_data$month == "1", 1, ifelse(prj_data$month == "2",1,0)))
+
+```
+
+
+```{r, warning=FALSE}
+
+# Comparing different months
+p1 <- ggplot(prj_data, aes(x = prj_data$wind_arithmetic_mean_n, y = prj_data$pm10_arithmetic_mean_n)) + facet_wrap(~prj_data$month) + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + labs(x = "Temperature (Fahrenheit)", y = "Daily O3 Concentration (Micrograms/cubic meter (LC))", title = "Ave. Daily Temperature vs Ave. Daily O3 by Month")+ geom_point(size = 0.5) + geom_smooth()
+print(p1)
+
+```
+
+
+```{r, warning=FALSE}
+
+# Comparing different States
+p2 <- ggplot(prj_data, aes(x = prj_data$temp_arithmetic_mean_n, y = prj_data$pm10_arithmetic_mean_n)) + facet_wrap(~prj_data$pm10_state_code) + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + labs(x = "Temperature (Fahrenheit)", y = "Daily O3 Concentration (Micrograms/cubic meter (LC))", title = "Ave. Daily Temperature vs Ave. Daily O3 by Month")+ geom_point(size = 0.5) + geom_smooth()
+print(p2)
+
+```
+
+
+```{r, warning=FALSE}
+
+# Obtaining the final set before the clustering
+total_data <- subset(prj_data, select = pm10_arithmetic_mean_n:wind_arithmetic_mean_n)
+total_data <- cbind(total_data,factor(prj_data$spring),factor(prj_data$summer),factor(prj_data$fall),factor(prj_data$winter))
+total_data$no2_aqi_n <- NULL
+
+```
+
+```{r, warning=FALSE}
+
+# Scale the data
+fn <- function(x) x * 1/max(x, na.rm = TRUE)
+ind <- sapply(total_data, is.numeric)
+total_data[ind] <- lapply(total_data[ind], fn)
+
+```
+
+
+```{r, warning=FALSE}
+
+glimpse(total_data)
+
+```
+
+
+```{r, warning=FALSE}
+
+# Subsetting the data based on seasons
+data_summer <- prj_data[ which(prj_data$summer=='1'), ]
+data_spring <- prj_data[ which(prj_data$spring=='1'), ]
+data_fall <- prj_data[ which(prj_data$fall=='1'), ]
+data_winter <- prj_data[ which(prj_data$winter=='1'), ]
+
+```
+
+
+## Summer Data
+
+```{r, warning=FALSE}
+
+# Extracting the relevant variables and then scale them to have a mean of 0 and std with 1
+data_sum_n <- subset(data_summer, select = pm10_arithmetic_mean_n:wind_arithmetic_mean_n)
+data_sum_n <- subset(data_sum_n, select = -no2_aqi_n)
+
+names(data_sum_n)[1]<-"PM10"
+names(data_sum_n)[2]<-"CO"
+names(data_sum_n)[3]<-"SO2"
+names(data_sum_n)[4]<-"O3"
+names(data_sum_n)[5]<-"PM2.5"
+names(data_sum_n)[6]<-"TEMP"
+names(data_sum_n)[7]<-"RH"
+names(data_sum_n)[8]<-"NO2"
+names(data_sum_n)[9]<-"WIND"
+scaled_summ_data <- scale(data_sum_n)
+
+```
+
+
+
+```{r, warning=FALSE}
+
+# Using Kmeans finding K
+theme_set(theme_cowplot(font_size=10)) # reduce default font size
+summer_data.pca <- prcomp(scaled_summ_data,center = FALSE, scale = FALSE) 
+w1<- fviz_eig(summer_data.pca)
+w2 <- fviz_nbclust(scaled_summ_data, kmeans, method = "wss") +
+  theme_classic()
+w3 <- fviz_nbclust(scaled_summ_data, kmeans, method = "silhouette") +
+  theme_classic()
+gap_statsu <- clusGap(scaled_summ_data, FUN = kmeans, K.max = 10, B = 2) 
+
+
+# Plot gap statistic
+w4 <- fviz_gap_stat(gap_statsu) +
+  theme_classic()
+
+plot_grid(w1,w2,w3,w4)
+
+
+```
+
+
+# K-Means on summer data
+
+```{r, warning=FALSE}
+
+set.seed(123)
+# Taking k as 4
+fit_summ <- kmeans(scaled_summ_data, 4)
+
+# Assigning cluster to the dataset
+data_sum_n$cluster <- fit_summ$cluster
+data_summer$cluster <- fit_summ$cluster
+
+# Plotting on the geolocations
+summ_plot <-data_summer %>%
+  dplyr::select(pm10_latitude_n,pm10_longitude_n,cluster)
+ 
+summ_plot_n <- summ_plot %>%
+   dplyr::count(pm10_longitude_n, pm10_latitude_n, cluster)
+
+colnames(summ_plot_n) <- c("pm10_longitude_n","pm10_latitude_n","cluster","count")
+
+statesUSA <- map_data("state")
+
+ggplot(data = statesUSA) + 
+  geom_polygon(aes(x = long, y = lat, group = group), fill = NA, color = "black",size = 0.15) +
+  coord_map() + 
+  geom_point(data = summ_plot_n, aes(x = pm10_longitude_n, y = pm10_latitude_n, color = as.factor(cluster), size = count)) +
+  scale_x_continuous(limits = c(-125,-68)) +
+  scale_y_continuous(limits = c(25,50))
+
+
+```
+
+
+```{r, warning=FALSE}
+
+cesu <- aggregate(data_sum_n, by=list(cluster=fit_summ$cluster), mean)
+is.num <- sapply(cesu, is.numeric)
+cesu[is.num] <- lapply(cesu[is.num], round, 2)
+cesu[-11]
+
+ 
+```
+
+
+# Partition Around Medoids on Summer Data
+
+```{r, warning=FALSE}
+
+set.seed(123)
+# Taking k as 4
+fit_summ <- clara(scaled_summ_data, 4, medoids.x = TRUE)
+
+# Assigning cluster to the dataset
+data_sum_n$cluster <- fit_summ$cluster
+data_summer$cluster <- fit_summ$cluster
+
+# Plotting on the geolocations
+summ_plot <-data_summer %>%
+  dplyr::select(pm10_latitude_n,pm10_longitude_n,cluster)
+ 
+summ_plot_n <- summ_plot %>%
+   dplyr::count(pm10_longitude_n, pm10_latitude_n, cluster)
+
+colnames(summ_plot_n) <- c("pm10_longitude_n","pm10_latitude_n","cluster","count")
+
+ggplot(data = statesUSA) + 
+  geom_polygon(aes(x = long, y = lat, group = group), fill = NA, color = "black",size = 0.15) +
+  coord_map() + 
+  geom_point(data = summ_plot_n, aes(x = pm10_longitude_n, y = pm10_latitude_n, color = as.factor(cluster), size = count)) +
+  scale_x_continuous(limits = c(-125,-68)) +
+  scale_y_continuous(limits = c(25,50))
+
+```
+
+
+```{r, warning=FALSE}
+
+
+t = data.frame(round(fit_summ$medoids, 4))
+
+t$PM10_n <- c((t$PM10*sd(data_summer$pm10_arithmetic_mean_n))+ mean(data_summer$pm10_arithmetic_mean_n))
+t$CO_n <- c((t$CO*sd(data_summer$co_arithmetic_mean_n))+ mean(data_summer$co_arithmetic_mean_n))
+t$SO2_n <- c((t$SO2*sd(data_summer$so2_arithmetic_mean_n))+ mean(data_summer$so2_arithmetic_mean_n))
+t$O3_n <- c((t$O3*sd(data_summer$o3_arithmetic_mean_n))+ mean(data_summer$o3_arithmetic_mean_n))
+t$PM2.5_n <- c((t$PM2.5*sd(data_summer$pm25f_arithmetic_mean_n))+ mean(data_summer$pm25f_arithmetic_mean_n))
+t$TEMP_n <- c((t$TEMP*sd(data_summer$temp_arithmetic_mean_n))+ mean(data_summer$temp_arithmetic_mean_n))
+t$RH_n <- c((t$RH*sd(data_summer$rhdp_arithmetic_mean_n))+ mean(data_summer$rhdp_arithmetic_mean_n))
+t$NO2_n <- c((t$NO2*sd(data_summer$no2_arithmetic_mean_n))+ mean(data_summer$no2_arithmetic_mean_n))
+t$WIND_n <- c((t$WIND*sd(data_summer$wind_arithmetic_mean_n))+ mean(data_summer$wind_arithmetic_mean_n))
+
+med_new <- t %>% dplyr::select(PM10_n:WIND_n)
+
+med_new
+
+```
+
+
+# GMM on Summer Data
+
+```{r, warning=FALSE}
+
+set.seed(123)
+# Fit GMM - G = 4 (4 clusters forced to compare to K-means)
+fit_summ_d <- Mclust(scaled_summ_data, G = 4)
+
+# Assigning cluster to the dataset
+data_summer$cluster <- fit_summ_d$classification
+summ_plot <- data.frame(
+  data_summer$pm10_longitude_n,
+  data_summer$pm10_latitude_n,
+  data_summer$cluster
+)
+colnames(summ_plot) <- c("pm10_longitude_n","pm10_latitude_n","cluster")
+
+summ_plot_n_dens <- summ_plot %>%
+  dplyr::count(pm10_longitude_n, pm10_latitude_n, cluster)
+
+colnames(summ_plot_n_dens) <- c("pm10_longitude_n","pm10_latitude_n","cluster","count")
+
+summ_plot_n_dens$cluster <- as.factor(summ_plot_n_dens$cluster)
+
+ggplot(data = statesUSA) + 
+  geom_polygon(aes(x = long, y = lat, group = group), fill = NA, color = "black") +
+  coord_map() + 
+  geom_point(data = summ_plot_n_dens, aes(x = pm10_longitude_n, y = pm10_latitude_n, color = cluster, size = count)) +
+  scale_x_continuous(limits = c(-125,-68)) +
+  scale_y_continuous(limits = c(25,50)) +
+  labs(title = "GMM Cluster-Summer", x = 'Longitude (Degrees)', y = 'Latitude (Degrees)')
+
+
+plot(fit_summ_d, what = "classification")
+
+```
+
+
+# Hierarchical Clustering on Summer Data
+
+```{r, warning=FALSE}
+
+set.seed(123)
+
+# Taking k as 4
+fit_summ <- hcut(scaled_summ_data, 4)
+
+# Assigning cluster to the dataset
+data_sum_n$cluster <- fit_summ$cluster
+data_summer$cluster <- fit_summ$cluster
+
+# Plotting on the geolocations
+summ_plot <-data_summer %>%
+  dplyr::select(pm10_latitude_n,pm10_longitude_n,cluster)
+ 
+summ_plot_n <- summ_plot %>%
+   dplyr::count(pm10_longitude_n, pm10_latitude_n, cluster)
+
+colnames(summ_plot_n) <- c("pm10_longitude_n","pm10_latitude_n","cluster","count")
+
+statesUSA <- map_data("state")
+
+ggplot(data = statesUSA) + 
+  geom_polygon(aes(x = long, y = lat, group = group), fill = NA, color = "black",size = 0.15) +
+  coord_map() + 
+  geom_point(data = summ_plot_n, aes(x = pm10_longitude_n, y = pm10_latitude_n, color = as.factor(cluster), size = count)) +
+  scale_x_continuous(limits = c(-125,-68)) +
+  scale_y_continuous(limits = c(25,50))
+
+
+```
+
+
+
+# DBScan on Summer Data
+
+```{r, warning=FALSE}
+
+dbscan::kNNdistplot(scaled_summ_data, k = 100)
+abline(h = 3, lty = 2)
+
+```
+
+
+```{r, warning=FALSE}
+
+# DB Scan 
+set.seed(123)
+db_fit_summ <- fpc::dbscan(scaled_summ_data, eps = 3 , MinPts = 20)
+
+
+data_summer$db_cluster <- db_fit_summ$cluster
+
+# Plotting on the geolocations
+db_summ_plot <- data_summer %>%
+  dplyr::select(pm10_latitude_n,pm10_longitude_n,db_cluster)
+
+db_summ_plot_n <- db_summ_plot %>%
+  dplyr::count(pm10_longitude_n, pm10_latitude_n, db_cluster)
+
+colnames(db_summ_plot_n) <- c("pm10_longitude_n","pm10_latitude_n","cluster","count")
+
+statesUSA <- map_data("state")
+
+ggplot(data = statesUSA) + 
+  geom_polygon(aes(x = long, y = lat, group = group), fill = NA, color = "black", size =0.15) +
+  coord_map() + 
+  geom_point(data = db_summ_plot_n, aes(x = pm10_longitude_n, y = pm10_latitude_n, color = rev(cluster) , size = count)) +
+  scale_x_continuous(limits = c(-125,-68)) +
+  scale_y_continuous(limits = c(25,50))
+data_summer$db_cluster <- NULL
+hist(db_fit_summ$cluster)
+
+```
+
+
+## Winter Data
+
+```{r, warning=FALSE}
+
+# Extracting the relevant variables and then scale them to have a mean of 0 and std with 1
+data_win_n <- subset(data_winter, select = pm10_arithmetic_mean_n:wind_arithmetic_mean_n)
+data_win_n <- subset(data_win_n, select = -no2_aqi_n)
+names(data_win_n)[1]<-"PM10"
+names(data_win_n)[2]<-"CO"
+names(data_win_n)[3]<-"SO2"
+names(data_win_n)[4]<-"O3"
+names(data_win_n)[5]<-"PM2.5"
+names(data_win_n)[6]<-"TEMP"
+names(data_win_n)[7]<-"RH"
+names(data_win_n)[8]<-"NO2"
+names(data_win_n)[9]<-"WIND"
+scaled_win_data <- scale(data_win_n)
+
+```
+
+
+# K-Means on Winter Data
+
+```{r, warning=FALSE}
+
+set.seed(123)
+# Taking k as 3
+fit_win <- kmeans(scaled_win_data, 3)
+
+# Assigning cluster to the dataset
+data_win_n$cluster <- fit_win$cluster
+data_winter$cluster <- fit_win$cluster
+
+# Plotting on the geolocations
+win_plot <-data_winter %>%
+  dplyr::select(pm10_latitude_n,pm10_longitude_n,cluster)
+ 
+win_plot_n <- win_plot %>%
+   dplyr::count(pm10_longitude_n, pm10_latitude_n, cluster)
+
+colnames(win_plot_n) <- c("pm10_longitude_n","pm10_latitude_n","cluster","count")
+
+ggplot(data = statesUSA) + 
+  geom_polygon(aes(x = long, y = lat, group = group), fill = NA, color = "black",size = 0.15) +
+  coord_map() + 
+  geom_point(data = win_plot_n, aes(x = pm10_longitude_n, y = pm10_latitude_n, color = as.factor(cluster), size = count)) +
+  scale_x_continuous(limits = c(-125,-68)) +
+  scale_y_continuous(limits = c(25,50))
+
+```
+
+
+```{r, warning=FALSE}
+
+
+cew <- aggregate(data_win_n, by=list(cluster=fit_win$cluster), mean)
+is.num <- sapply(cew, is.numeric)
+cew[is.num] <- lapply(cew[is.num], round, 2)
+cew[-11]
+
+ 
+```
+
+
+# PAM on Winter Data
+
+```{r, warning=FALSE}
+
+set.seed(123)
+# Taking k as 3
+fit_win <- clara(scaled_win_data, 3)
+
+# Assigning cluster to the dataset
+data_win_n$cluster <- fit_win$cluster
+data_winter$cluster <- fit_win$cluster
+
+# Plotting on the geolocations
+win_plot <-data_winter %>%
+  dplyr::select(pm10_latitude_n,pm10_longitude_n,cluster)
+ 
+win_plot_n <- win_plot %>%
+   dplyr::count(pm10_longitude_n, pm10_latitude_n, cluster)
+
+colnames(win_plot_n) <- c("pm10_longitude_n","pm10_latitude_n","cluster","count")
+
+ggplot(data = statesUSA) + 
+  geom_polygon(aes(x = long, y = lat, group = group), fill = NA, color = "black",size = 0.15) +
+  coord_map() + 
+  geom_point(data = win_plot_n, aes(x = pm10_longitude_n, y = pm10_latitude_n, color = as.factor(cluster), size = count)) +
+  scale_x_continuous(limits = c(-125,-68)) +
+  scale_y_continuous(limits = c(25,50))
+
+```
+
+
+```{r, warning=FALSE}
+
+t = data.frame(round(fit_win$medoids, 4))
+
+t$PM10_n <- c((t$PM10*sd(data_winter$pm10_arithmetic_mean_n))+ mean(data_winter$pm10_arithmetic_mean_n))
+t$CO_n <- c((t$CO*sd(data_winter$co_arithmetic_mean_n))+ mean(data_winter$co_arithmetic_mean_n))
+t$SO2_n <- c((t$SO2*sd(data_winter$so2_arithmetic_mean_n))+ mean(data_winter$so2_arithmetic_mean_n))
+t$O3_n <- c((t$O3*sd(data_winter$o3_arithmetic_mean_n))+ mean(data_winter$o3_arithmetic_mean_n))
+t$PM2.5_n <- c((t$PM2.5*sd(data_winter$pm25f_arithmetic_mean_n))+ mean(data_winter$pm25f_arithmetic_mean_n))
+t$TEMP_n <- c((t$TEMP*sd(data_winter$temp_arithmetic_mean_n))+ mean(data_winter$temp_arithmetic_mean_n))
+t$RH_n <- c((t$RH*sd(data_winter$rhdp_arithmetic_mean_n))+ mean(data_winter$rhdp_arithmetic_mean_n))
+t$NO2_n <- c((t$NO2*sd(data_winter$no2_arithmetic_mean_n))+ mean(data_winter$no2_arithmetic_mean_n))
+t$WIND_n <- c((t$WIND*sd(data_winter$wind_arithmetic_mean_n))+ mean(data_winter$wind_arithmetic_mean_n))
+
+med_new <- t %>% dplyr::select(PM10_n:WIND_n)
+
+med_new
+
+```
+
+
+## Fall Data
+
+```{r, warning=FALSE}
+
+# Extracting the relevant variables and then scale them to have a mean of 0 and std with 1
+data_fall_n <- subset(data_fall, select = pm10_arithmetic_mean_n:wind_arithmetic_mean_n)
+data_fall_n <- subset(data_fall_n, select = -no2_aqi_n)
+names(data_fall_n)[1]<-"PM10"
+names(data_fall_n)[2]<-"CO"
+names(data_fall_n)[3]<-"SO2"
+names(data_fall_n)[4]<-"O3"
+names(data_fall_n)[5]<-"PM2.5"
+names(data_fall_n)[6]<-"TEMP"
+names(data_fall_n)[7]<-"RH"
+names(data_fall_n)[8]<-"NO2"
+names(data_fall_n)[9]<-"WIND"
+scaled_fall_data <- scale(data_fall_n)
+
+```
+
+
+```{r, warning=FALSE}
+
+set.seed(123)
+
+theme_set(theme_cowplot(font_size=10)) # reduce default font size
+fall_data.pca <- prcomp(scaled_fall_data,center = FALSE, scale = FALSE) 
+w1<- fviz_eig(fall_data.pca)
+w2 <- fviz_nbclust(scaled_fall_data, kmeans, method = "wss") +
+  theme_classic()
+w3 <- fviz_nbclust(scaled_fall_data, kmeans, method = "silhouette") +
+  theme_classic()
+gap_statf <- clusGap(scaled_fall_data, FUN = kmeans, K.max = 10, B = 5) 
+
+
+# Plot gap statistic
+w4 <- fviz_gap_stat(gap_statf)
+plot_grid(w1,w2,w3,w4)
+
+
+```
+
+
+# K-Means on Fall Data
+
+```{r, warning=FALSE}
+
+set.seed(123)
+# Taking k as 6
+fit_fall <- kmeans(scaled_fall_data, 6)
+
+# Assigning cluster to the dataset
+data_fall_n$cluster <- fit_fall$cluster
+data_fall$cluster <- fit_fall$cluster
+
+# Plotting on the geolocations
+fall_plot <-data_fall %>%
+  dplyr::select(pm10_latitude_n,pm10_longitude_n,cluster)
+ 
+fall_plot_n <- fall_plot %>%
+   dplyr::count(pm10_longitude_n, pm10_latitude_n, cluster)
+
+colnames(fall_plot_n) <- c("pm10_longitude_n","pm10_latitude_n","cluster","count")
+
+statesUSA <- map_data("state")
+
+ggplot(data = statesUSA) + 
+  geom_polygon(aes(x = long, y = lat, group = group), fill = NA, color = "black",size = 0.15) +
+  coord_map() + 
+  geom_point(data = fall_plot_n, aes(x = pm10_longitude_n, y = pm10_latitude_n, color = as.factor(cluster), size = count)) +
+  scale_x_continuous(limits = c(-125,-68)) +
+  scale_y_continuous(limits = c(25,50))
+
+
+```
+
+
+```{r, warning=FALSE}
+
+
+cef <- aggregate(data_fall_n, by=list(cluster=fit_fall$cluster), mean)
+is.num <- sapply(cef, is.numeric)
+cef[is.num] <- lapply(cef[is.num], round, 2)
+cef[-11]
+
+ 
+```
+
+
+# Partition Around Medoids for Fall Data
+
+```{r,, warning=FALSE}
+
+set.seed(123)
+# Taking k as 6
+fit_fall <- clara(scaled_fall_data, 6)
+
+# Assigning cluster to the dataset
+data_fall_n$cluster <- fit_fall$cluster
+data_fall$cluster <- fit_fall$cluster
+
+# Plotting on the geolocations
+fall_plot <-data_fall %>%
+  dplyr::select(pm10_latitude_n,pm10_longitude_n,cluster)
+ 
+fall_plot_n <- fall_plot %>%
+   dplyr::count(pm10_longitude_n, pm10_latitude_n, cluster)
+
+colnames(fall_plot_n) <- c("pm10_longitude_n","pm10_latitude_n","cluster","count")
+
+statesUSA <- map_data("state")
+
+ggplot(data = statesUSA) + 
+  geom_polygon(aes(x = long, y = lat, group = group), fill = NA, color = "black",size = 0.15) +
+  coord_map() + 
+  geom_point(data = fall_plot_n, aes(x = pm10_longitude_n, y = pm10_latitude_n, color = as.factor(cluster), size = count)) +
+  scale_x_continuous(limits = c(-125,-68)) +
+  scale_y_continuous(limits = c(25,50))
+
+```
+
+
+```{r, warning=FALSE}
+
+
+t = data.frame(round(fit_fall$medoids, 4))
+
+t$PM10_n <- c((t$PM10*sd(data_fall$pm10_arithmetic_mean_n))+ mean(data_fall$pm10_arithmetic_mean_n))
+t$CO_n <- c((t$CO*sd(data_fall$co_arithmetic_mean_n))+ mean(data_fall$co_arithmetic_mean_n))
+t$SO2_n <- c((t$SO2*sd(data_fall$so2_arithmetic_mean_n))+ mean(data_fall$so2_arithmetic_mean_n))
+t$O3_n <- c((t$O3*sd(data_fall$o3_arithmetic_mean_n))+ mean(data_fall$o3_arithmetic_mean_n))
+t$PM2.5_n <- c((t$PM2.5*sd(data_fall$pm25f_arithmetic_mean_n))+ mean(data_fall$pm25f_arithmetic_mean_n))
+t$TEMP_n <- c((t$TEMP*sd(data_fall$temp_arithmetic_mean_n))+ mean(data_fall$temp_arithmetic_mean_n))
+t$RH_n <- c((t$RH*sd(data_fall$rhdp_arithmetic_mean_n))+ mean(data_fall$rhdp_arithmetic_mean_n))
+t$NO2_n <- c((t$NO2*sd(data_fall$no2_arithmetic_mean_n))+ mean(data_fall$no2_arithmetic_mean_n))
+t$WIND_n <- c((t$WIND*sd(data_fall$wind_arithmetic_mean_n))+ mean(data_fall$wind_arithmetic_mean_n))
+
+med_new <- t %>% dplyr::select(PM10_n:WIND_n)
+
+med_new
+
+```
+
+
+## Spring Data
+
+```{r, warning=FALSE}
+
+# Extracting the relevant variables and then scale them to have a mean of 0 and std with 1
+data_spr_n <- subset(data_spring, select = pm10_arithmetic_mean_n:wind_arithmetic_mean_n)
+data_spr_n <- subset(data_spr_n, select = -no2_aqi_n)
+names(data_spr_n)[1]<-"PM10"
+names(data_spr_n)[2]<-"CO"
+names(data_spr_n)[3]<-"SO2"
+names(data_spr_n)[4]<-"O3"
+names(data_spr_n)[5]<-"PM2.5"
+names(data_spr_n)[6]<-"TEMP"
+names(data_spr_n)[7]<-"RH"
+names(data_spr_n)[8]<-"NO2"
+names(data_spr_n)[9]<-"WIND"
+scaled_spr_data <- scale(data_spr_n)
+
+```
+
+
+```{r, warning=FALSE}
+
+set.seed(123)
+
+theme_set(theme_cowplot(font_size=10)) # reduce default font size
+spr_data.pca <- prcomp(scaled_spr_data,center = FALSE, scale = FALSE) 
+w1<- fviz_eig(spr_data.pca)
+w2 <- fviz_nbclust(scaled_spr_data, clara, method = "wss") +
+  theme_classic()
+w3 <- fviz_nbclust(scaled_spr_data, clara, method = "silhouette") +
+  theme_classic()
+gap_statsp <- clusGap(scaled_spr_data, FUN = clara, K.max = 10, B = 5) 
+
+# Plot gap statistic
+w4 <- fviz_gap_stat(gap_statsp)
+plot_grid(w1,w2,w3,w4)
+
+```
+
+
+# K-Means for Spring Data
+
+```{r, warning=FALSE}
+
+set.seed(123)
+# Taking k as 3
+fit_spr <- kmeans(scaled_spr_data, 3)
+
+# Assigning cluster to the dataset
+data_spr_n$cluster <- fit_spr$cluster
+data_spring$cluster <- fit_spr$cluster
+
+# Plotting on the geolocations
+spr_plot <-data_spring %>%
+  dplyr::select(pm10_latitude_n,pm10_longitude_n,cluster)
+ 
+spr_plot_n <- spr_plot %>%
+   dplyr::count(pm10_longitude_n, pm10_latitude_n, cluster)
+
+colnames(spr_plot_n) <- c("pm10_longitude_n","pm10_latitude_n","cluster","count")
+
+statesUSA <- map_data("state")
+
+ggplot(data = statesUSA) + 
+  geom_polygon(aes(x = long, y = lat, group = group), fill = NA, color = "black",size = 0.15) +
+  coord_map() + 
+  geom_point(data = spr_plot_n, aes(x = pm10_longitude_n, y = pm10_latitude_n, color = as.factor(cluster), size = count)) +
+  scale_x_continuous(limits = c(-125,-68)) +
+  scale_y_continuous(limits = c(25,50))
+
+
+```
+
+
+```{r, warning=FALSE}
+
+data_spr_n$cluster <- NULL
+data_spring$cluster <- NULL
+
+ces <- aggregate(data_spr_n, by=list(cluster=fit_spr$cluster), mean)
+is.num <- sapply(ces, is.numeric)
+ces[is.num] <- lapply(ces[is.num], round, 2)
+ces[-11]
+
+ 
+```
+
+
+# Partition Around Medoids for K-Means
+
+```{r, warning=FALSE}
+
+set.seed(123)
+
+# Taking k as 3
+fit_spr <- clara(scaled_spr_data, 3)
+
+# Assigning cluster to the dataset
+data_spr_n$cluster <- fit_spr$cluster
+data_spring$cluster <- fit_spr$cluster
+
+# Plotting on the geolocations
+spr_plot <-data_spring %>%
+  dplyr::select(pm10_latitude_n,pm10_longitude_n,cluster)
+ 
+spr_plot_n <- spr_plot %>%
+   dplyr::count(pm10_longitude_n, pm10_latitude_n, cluster)
+
+colnames(spr_plot_n) <- c("pm10_longitude_n","pm10_latitude_n","cluster","count")
+
+statesUSA <- map_data("state")
+
+ggplot(data = statesUSA) + 
+  geom_polygon(aes(x = long, y = lat, group = group), fill = NA, color = "black",size = 0.15) +
+  coord_map() + 
+  geom_point(data = spr_plot_n, aes(x = pm10_longitude_n, y = pm10_latitude_n, color = as.factor(cluster), size = count)) +
+  scale_x_continuous(limits = c(-125,-68)) +
+  scale_y_continuous(limits = c(25,50))
+
+
+```
+
+
+```{r, warning=FALSE}
+
+t = data.frame(round(fit_spr$medoids, 4))
+
+t$PM10_n <- c((t$PM10*sd(data_spring$pm10_arithmetic_mean_n))+ mean(data_spring$pm10_arithmetic_mean_n))
+t$CO_n <- c((t$CO*sd(data_spring$co_arithmetic_mean_n))+ mean(data_spring$co_arithmetic_mean_n))
+t$SO2_n <- c((t$SO2*sd(data_spring$so2_arithmetic_mean_n))+ mean(data_spring$so2_arithmetic_mean_n))
+t$O3_n <- c((t$O3*sd(data_spring$o3_arithmetic_mean_n))+ mean(data_spring$o3_arithmetic_mean_n))
+t$PM2.5_n <- c((t$PM2.5*sd(data_spring$pm25f_arithmetic_mean_n))+ mean(data_spring$pm25f_arithmetic_mean_n))
+t$TEMP_n <- c((t$TEMP*sd(data_spring$temp_arithmetic_mean_n))+ mean(data_spring$temp_arithmetic_mean_n))
+t$RH_n <- c((t$RH*sd(data_spring$rhdp_arithmetic_mean_n))+ mean(data_spring$rhdp_arithmetic_mean_n))
+t$NO2_n <- c((t$NO2*sd(data_spring$no2_arithmetic_mean_n))+ mean(data_spring$no2_arithmetic_mean_n))
+t$WIND_n <- c((t$WIND*sd(data_spring$wind_arithmetic_mean_n))+ mean(data_spring$wind_arithmetic_mean_n))
+
+med_new <- t %>% dplyr::select(PM10_n:WIND_n)
+
+med_new
+
+```
+
+
+
+
+
+

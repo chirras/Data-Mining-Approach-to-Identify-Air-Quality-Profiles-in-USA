@@ -1,0 +1,136 @@
+﻿Data:
+
+
+https://bigquery.cloud.google.com/dataset/bigquery-public-data:epa_historical_air_quality
+
+
+SQL code:
+
+
+SELECT pm10.state_code,
+pm10.county_code,
+pm10.site_num,
+pm10.date_local,
+pm10.arithmetic_mean,
+pm10.units_of_measure,
+pm10.sample_duration,
+co.arithmetic_mean,
+co.units_of_measure,
+co.sample_duration,
+so2.arithmetic_mean,
+so2.units_of_measure,
+so2.sample_duration,
+o3.arithmetic_mean,
+o3.units_of_measure,
+o3.sample_duration,
+pm25f.arithmetic_mean,
+pm25f.units_of_measure,
+pm25f.sample_duration,
+pm25n.arithmetic_mean,
+pm25n.units_of_measure,
+pm25n.sample_duration,
+pressure.arithmetic_mean,
+pressure.units_of_measure,
+pressure.sample_duration,
+temp.arithmetic_mean,
+temp.units_of_measure,
+temp.sample_duration,
+rhdp.arithmetic_mean,
+rhdp.units_of_measure,
+rhdp.sample_duration,
+non.arithmetic_mean,
+non.units_of_measure,
+non.sample_duration,
+non.parameter_name,
+no2.arithmetic_mean,
+no2.units_of_measure,
+no2.sample_duration,
+no2.aqi,
+wind.arithmetic_mean,
+wind.units_of_measure,
+wind.parameter_name
+
+
+FROM [bigquery-public-data:epa_historical_air_quality.pm10_daily_summary] pm10
+inner join [bigquery-public-data:epa_historical_air_quality.co_daily_summary] co
+on pm10.state_code = co.state_code
+and pm10.county_code = co.county_code
+and pm10.site_num = co.site_num
+and pm10.date_local = co.date_local
+inner join [bigquery-public-data:epa_historical_air_quality.so2_daily_summary] so2
+on pm10.state_code = so2.state_code
+and pm10.county_code = so2.county_code
+and pm10.site_num = so2.site_num
+and pm10.date_local = so2.date_local
+inner join [bigquery-public-data:epa_historical_air_quality.o3_daily_summary] o3
+on pm10.state_code = o3.state_code
+and pm10.county_code = o3.county_code
+and pm10.site_num = o3.site_num
+and pm10.date_local = o3.date_local
+inner join [bigquery-public-data:epa_historical_air_quality.o3_daily_summary] pm25n
+on pm10.state_code = pm25n.state_code
+and pm10.county_code = pm25n.county_code
+and pm10.site_num = pm25n.site_num
+and pm10.date_local = pm25n.date_local
+inner join [bigquery-public-data:epa_historical_air_quality.pm25_frm_daily_summary]
+pm25f
+on pm10.state_code = pm25f.state_code
+and pm10.county_code = pm25f.county_code
+and pm10.site_num = pm25f.site_num
+and pm10.date_local = pm25f.date_local
+inner join [bigquery-public-data:epa_historical_air_quality.pressure_daily_summary]
+pressure
+on pm10.state_code = pressure.state_code
+and pm10.county_code = pressure.county_code
+and pm10.site_num = pressure.site_num
+and pm10.date_local = pressure.date_local
+inner join [bigquery-public-data:epa_historical_air_quality.rh_and_dp_daily_summary]
+rhdp
+on pm10.state_code = rhdp.state_code
+and pm10.county_code = rhdp.county_code
+and pm10.site_num = rhdp.site_num
+and pm10.date_local = rhdp.date_local
+inner join [bigquery-public-data:epa_historical_air_quality.temperature_daily_summary]
+temp
+on pm10.state_code = temp.state_code
+and pm10.county_code = temp.county_code
+and pm10.site_num = temp.site_num
+and pm10.date_local = temp.date_local
+inner join [bigquery-public-data:epa_historical_air_quality.no2_daily_summary] no2
+on pm10.state_code =  no2.state_code
+and pm10.county_code = no2.county_code
+and pm10.site_num = no2.site_num
+and pm10.date_local = no2.date_local
+inner join [bigquery-public-data:epa_historical_air_quality.nonoxnoy_daily_summary]
+non
+on pm10.state_code =  non.state_code
+and pm10.county_code = non.county_code
+and pm10.site_num = non.site_num
+and pm10.date_local = non.date_local
+inner join [bigquery-public-data:epa_historical_air_quality.wind_daily_summary] wind
+on pm10.state_code =  wind.state_code
+and pm10.county_code = wind.county_code
+and pm10.site_num = wind.site_num
+and pm10.date_local = wind.date_local
+
+
+where (co.sample_duration like '%8%'or co.sample_duration like '%24%')
+and (pm25f.sample_duration like '%8%' or pm25f.sample_duration like '%24%')
+and (pm25n.sample_duration like '%8%' or pm25n.sample_duration like '%24%')
+and (o3.sample_duration like '%8%' or o3.sample_duration like '%24%')
+and (pm10.sample_duration like '%8%' or pm10.sample_duration like '%24%')
+and wind.parameter_name like'%Speed%'
+and non.parameter_name like'%Oxides of nitrogen%'
+and (co.units_of_measure like '%Parts per million%')
+and (no2.units_of_measure like '%Parts per billion%')
+and (o3.units_of_measure like '%Parts per million%')
+and (pm10.units_of_measure like '%Micrograms/cubic meter (25 C)%')
+and (pm25f.units_of_measure like '%Micrograms/cubic meter (LC)%')
+and (pm25n.units_of_measure like '%Micrograms/cubic meter (LC)%')
+and (pressure.units_of_measure like '%Millibars%')
+and (so2.units_of_measure like '%Parts per billion%')
+and (rhdp.units_of_measure like '%Percent relative%')
+and (temp.units_of_measure like '%Degrees Fahrenheit%')
+
+
+LIMIT 100000000
